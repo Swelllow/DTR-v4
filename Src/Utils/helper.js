@@ -1,5 +1,23 @@
 const { EmbedBuilder } = require('discord.js');
+const moment = require('moment');
 const axios = require('axios');
+const crypto = require('crypto');
+const ENC = 'bf3c199c2470cb477d907b1e0917c17b';
+const IV = "5183666c72eec9e4";
+const ALGO = "aes-256-cbc"
+
+const encrypt = ((text) => {
+    let cipher = crypto.createCipheriv(ALGO, ENC, IV);
+    let encrypted = cipher.update(text, 'utf8', 'base64');
+    encrypted += cipher.final('base64');
+    return encrypted;
+});
+
+const decrypt = ((text) => {
+    let decipher = crypto.createDecipheriv(ALGO, ENC, IV);
+    let decrypted = decipher.update(text, 'base64', 'utf8');
+    return (decrypted + decipher.final('utf8'));
+});
 
 const timeMap = {
     '1hr': 60 * 60 * 1000,
@@ -95,6 +113,28 @@ function handleReactionAsync(interaction, messageObj) {
     });
 };
 
+function isNumeric(str) {
+    if (typeof str != "string") return false
+    return !isNaN(str) &&
+        !isNaN(parseFloat(str))
+};
+
+function millisToMinutesAndSeconds(millis) {
+    var hours = Math.floor(millis / 3600000);
+    var minutes = Math.floor((millis % 3600000) / 60000);
+    var seconds = ((millis % 60000) / 1000).toFixed(0);
+
+    if (hours === 1) {
+        return hours + " hour" + (minutes > 0 ? + ` ${minutes} minutes` : "");
+    } else if (hours > 0) {
+        return hours + " hours" + (minutes > 0 ? + ` ${minutes} minutes` : "");
+    } else if (minutes > 0) {
+        return minutes + " minutes" + (seconds < 10 ? '0' : '') + seconds + " seconds";
+    } else {
+        return seconds + " seconds";
+    }
+};
+
 function msToTimeFormat(ms) {
     return moment(ms).format('MMM Do YYYY, h:mm A');
 };
@@ -110,12 +150,6 @@ async function retrievePlayerThumbnail(player) {
     }
 };
 
-function isNumeric(str) {
-    if (typeof str != "string") return false
-    return  !isNaN(str) &&
-            !isNaN(parseFloat(str))
-}
-
 async function validatePlayer(playerName) {
     let baseURL = 'https://users.roblox.com/v1/usernames/users';
     if (isNumeric(playerName)) {
@@ -130,7 +164,7 @@ async function validatePlayer(playerName) {
 
         const data = response.data.data[0];
         if (data.id !== undefined) {
-            return {id: data.id, name: data.name};
+            return { id: data.id, name: data.name };
         } else {
             return false;
         }
@@ -139,4 +173,4 @@ async function validatePlayer(playerName) {
     }
 };
 
-module.exports = { createEmbed, createFieldEmbed, handleReaction, handleReactionAsync, msToTimeFormat, retrievePlayerThumbnail, timeMap, validatePlayer }
+module.exports = { encrypt, decrypt, createEmbed, createFieldEmbed, handleReaction, handleReactionAsync, millisToMinutesAndSeconds, msToTimeFormat, retrievePlayerThumbnail, timeMap, validatePlayer }

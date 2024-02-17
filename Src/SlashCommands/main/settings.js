@@ -1,7 +1,9 @@
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
-const Universes = require('../../Schemas/Universes.js');
-const argon2 = require("argon2");
+const { encrypt, decrypt } = require('../../Utils/helper.js');
 require('dotenv/config');
+
+const secretSchema = require('../../Schemas/Secrets.js')
+const universeSchema = require('../../Schemas/Universes.js');
 
 const warnColor = '#eb4034';
 const successColor = '#00ff44';
@@ -68,7 +70,7 @@ module.exports = {
 
         await interaction.deferReply();
 
-        const isKeyReserved = await Universes.getUniverse(server);
+        const isKeyReserved = await universeSchema.getUniverse(server);
         if (subcommand === 'add-universe') {
             const reservedEmbed = new EmbedBuilder()
                 .setTitle('❌ Key Reserved')
@@ -76,7 +78,7 @@ module.exports = {
                 .setColor(warnColor)
             if (isKeyReserved) return interaction.editReply({ embeds: [reservedEmbed] });
     
-            const result = await Universes.addUniverse(server, value);
+            const result = await universeSchema.addUniverse(server, value);
     
             const successEmbed = new EmbedBuilder()
                 .setTitle(`${result ? '✔️ Universe Saved' : '❌ Universe Save Failed'}`)
@@ -90,7 +92,7 @@ module.exports = {
                 .setDescription(`Failed to retrieve Universe: **${server}**`)
             if (!isKeyReserved) return interaction.editReply({ embeds: [noKeyEmbed] })
 
-            const result = await Universes.removeUniverse(server);
+            const result = await universeSchema.removeUniverse(server);
 
             const successEmbed = new EmbedBuilder()
                 .setTitle(`${result ? '✔️ Universe Removed' : '❌ Universe Removal Failed'}`)
@@ -99,16 +101,14 @@ module.exports = {
     
             await interaction.editReply({ embeds: [successEmbed] });
         } else if (subcommand === 'set-keys') {
-            // delete previous guild key data from db
-            // deleteOne({ guildId: guild.id });
+            await secretSchema.deleteOne({ guildId: interaction.guildId });
 
-            const salt = Buffer.from(process.env.serverSalt);
-            const mongoKey = await argon2.hash(dbUrl, { salt: salt });
-            const msApiKey = await argon2.hash(msKey, { salt: salt });
-            const datastoreApiKey = await argon2.hash(dsKey, { salt: salt });
+            const mongoKey = encrypt(dbUrl);
+            const msApiKey = encrypt(msKey);
+            const datastoreApiKey = encrypt(dsKey);
 
             // store collection of secrets
-            await keySchema.create({
+            await secretSchema.create({
                 messagingServiceKey: msApiKey,
                 datastoreServiceKey: datastoreApiKey,
                 mongoDbUrl: mongoKey,

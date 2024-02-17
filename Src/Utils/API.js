@@ -1,4 +1,6 @@
+const { decrypt } = require('./helper.js');
 const axios = require('axios');
+const crypto = require('crypto');
 
 async function publish_message(universeId, message) {
     const base_url = 'https://apis.roblox.com/messaging-service/v1/universes/';
@@ -34,10 +36,11 @@ async function publish_message(universeId, message) {
     return response.data;
 };
 
-async function set_entry(universeId, datastore, object_key, value, scope = null) {
+async function set_entry(secret, universeId, datastore, object_key, value, scope = null) {
     const base_url = 'https://apis.roblox.com/datastores/v1/universes/';
-    const apiKey = null;
+    const apiKey = decrypt(secret);
     const objects_url = base_url + universeId + '/standard-datastores/datastore/entries/entry';
+    let errorState = null;
 
     const params = {
         'datastoreName': datastore,
@@ -58,12 +61,14 @@ async function set_entry(universeId, datastore, object_key, value, scope = null)
             'content-type': 'application/json'
         }}
     ).catch(err => {
-        console.log(err.response.data);
+        errorState = err.response.data;
     });
 
-    if (response.data) {
-        return response.data;
+    if (response && response.data) {
+        return { state: true, info: response.data };
     };
+
+    return { state: false, info: `${response && response.data || errorState}` };
 };
 
 module.exports = { publish_message, set_entry };

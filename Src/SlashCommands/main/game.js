@@ -1,10 +1,11 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { createEmbed, createFieldEmbed, handleReactionAsync, msToTimeFormat, retrievePlayerThumbnail, timeMap, validatePlayer } = require('../../Utils/helper.js');
+const { createEmbed, createFieldEmbed, handleReactionAsync, millisToMinutesAndSeconds, msToTimeFormat, retrievePlayerThumbnail, timeMap, validatePlayer } = require('../../Utils/helper.js');
 const { publish_message, set_entry } = require('../../Utils/API.js');
 require('dotenv').config()
 
-const universeSchema = require('../../Schemas/Universes.js')
 const banSchema = require('../../Schemas/Ban.js');
+const universeSchema = require('../../Schemas/Universes.js');
+const secretSchema = require('../../Schemas/Secrets.js');
 
 const warnColor = '#eb4034';
 const successColor = '#00ff44';
@@ -195,8 +196,12 @@ module.exports = {
                 handleReactionAsync(interaction, message)
                     .then(async ({ _reaction, _user, state }) => {
                         if (state === true) {
+                            const currentTime = Date.now();
                             const configuredTime = timeMap[length];
-                            const configuredExpired = msToTimeFormat(Date.now() + configuredTime);
+                            const expirationTime = currentTime + configuredTime;
+
+
+                            const configuredExpired = msToTimeFormat(expirationTime);
 
                             const entryKey = `user_${foundPlayer.id}`;
                             const payload = JSON.stringify({
@@ -206,18 +211,37 @@ module.exports = {
                                 expires: configuredExpired
                             });
 
-                            // ban in datastore
-                            const banResult = await set_entry(server, 'DTR', entryKey, payload);
-                            // kick using messagingService
+                            // ban in datastore \\
+                            const datastoreSecret = await secretSchema.getKey('datastoreServiceKey', interaction.guildId);
+                            if (!datastoreSecret) {
+                                // key not configured
+                            };
+                            const { state, info } = await set_entry(datastoreSecret, server, 'DTR', entryKey, payload);
 
-                            // ban in database
-                            await banSchema.create({
-                                userId: foundPlayer.id,
-                                reason: reason,
-                                duration: configuredTime,
-                                expires: configuredExpired
-                            });
+                            // kick using messagingService \\
+
+                            // ban in database \\
+
+                            // await banSchema.create({
+                            //     userId: foundPlayer.id,
+                            //     reason: reason,
+                            //     duration: configuredTime,
+                            //     expires: configuredExpired
+                            // });
+                            const responseColor = state ? successColor : warnColor;
+                            let fields = [
+                                { name: 'Username', value: `> ${foundPlayer.name}` },
+                                { name: 'User ID', value: `> ${foundPlayer.id}` },
+                                { name: 'Reason', value: `> ${reason}` },
+                                { name: 'Duration', value: `> ${millisToMinutesAndSeconds(configuredTime)}` },
+                                { name: 'Expiration', value: `> ${configuredExpired}` },
+                                { name: '\u200B', value: '\u200B' },
+                                { name: 'Response', value: `${info}` },
+                            ];
+                            const responseEmbed = createFieldEmbed(`${state ? '✔️ Ban Successful' : '❌ Ban Failed'}`, fields, responseColor, playerThumbnail);
+                            await interaction.editReply({ embeds: [responseEmbed], fetchReply: true });
                         } else {
+
                             const fields = [
                                 { name: 'Ban Cancelled', value: 'Cancelled the ban process' }
                             ];
@@ -281,7 +305,6 @@ module.exports = {
     autocomplete: async ({ interaction, client, handler }) => {
         const focusedValue = interaction.options.getString('server'); // || .options.getFocused();
         const choices = await universeSchema.listUniverses();
-        console.log(choices);
 
         const filtered = choices.filter((choice) => {
             if (typeof focusedValue === 'string') {
@@ -289,17 +312,10 @@ module.exports = {
             }
             return false;
         });
-        await interaction.respond(filtered.map((choice) => ({ name: choice.name, value: choice.id })));
-        // const focusedValue = interaction.options.getFocused();
-        // const choices = null;
 
-        // const filtered = choices.filter((choice) => {
-        // if (typeof focusedValue === 'string') {
-        // return choice.name.toLowerCase()
-        // }
-        // return false;
-        // })
-        // await interaction.respond(filtered.map((choice) => ({ name: choice.name, value: choice.id })));
-        // return false;
+        await interaction.respond(filtered.map((choice) => ({
+            name: choice.name,
+            value: choice.id
+        })));
     }
 };
